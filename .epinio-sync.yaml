@@ -1,0 +1,25 @@
+# .epinio-sync.yaml
+# app watch reads this file to decide how to sync local changes into the running pod.
+#
+# Run (app must already be pushed):
+#   epinio app watch example-java --path .
+#
+# Java/Spring Boot is compiled, so this app uses binary mode.
+# On every save, watch runs build_cmd locally, then uploads the binary into the pod.
+# The supervisor replaces the running process with the new binary.
+#
+# The supervisor executes /epinio-sync/app directly, so the uploaded file must be
+# a runnable program. A plain Spring Boot jar is not executable by itself, so
+# build_cmd prepends a shebang that runs the jar with the Paketo JRE.
+#
+# Do not call `java` on PATH: the CNB image does not put `java` on PATH for this
+# supervisor. Use the Liberica JRE shipped by the Paketo BellSoft buildpack.
+# JDK 21 must be installed on the machine that runs `epinio app watch`
+# (same major version as sourceCompatibility).
+
+# Rebuild the boot jar (skip tests for a faster inner loop), then wrap it as
+# an executable that launches with the in-image JRE.
+build_cmd: "chmod +x ./gradlew && ./gradlew bootJar -x test && mkdir -p bin && { printf '%s\\n' '#!/bin/sh' 'exec /layers/paketo-buildpacks_bellsoft-liberica/jre/bin/java -jar \"$0\" \"$@\"'; cat build/libs/demo-0.0.1-SNAPSHOT.jar; } > ./bin/example-java && chmod +x ./bin/example-java"
+
+# Path to the wrapped jar, relative to this source root. Watch uploads this file.
+binary: "./bin/example-java"
